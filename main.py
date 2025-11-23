@@ -11,13 +11,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
 
-# OWNER IDS (AS YOU GAVE ME)
+# OWNER IDS
 OWNER_IDS = [8180209483, 7926496057]
 
-# Banner image (PostImages direct link)
+# Banner image
 PHOTO_PATH = "https://i.postimg.cc/76L59xVj/03cf19b6-e979-4d2f-9d6f-3ba2469e60c2.jpg"
 
-# --- 4 CHANNEL FORCE JOIN SETTINGS ---
+# Force join channels
 CHANNELS = [
     (-1002090323246, "⚡", "https://t.me/CodeTweakz"),
     (-1002145075313, "🔥", "https://t.me/Scripts0x"),
@@ -25,7 +25,7 @@ CHANNELS = [
     (-1002733321153, "🚀", "https://t.me/MethRoot"),
 ]
 
-# Custom caption you provided
+# Caption on force join
 CAPTION = """
 💀 **Welcome to the Sevr0c–Moros AI ⚡**
 
@@ -40,7 +40,7 @@ If you want practical hacking knowledge, real-world tips, updated methods, and e
 👉 **Join now and unlock the skills others hide.**
 """
 
-# status message for users who already joined
+# Status message
 STATUS_MSG = """
 💀 Sevr0c–Moros AI Status
 ━━━━━━━━━━━━━━━━━━
@@ -49,7 +49,7 @@ STATUS_MSG = """
 🔥 All features working
 """
 
-# ---------------------------- USER DATABASE ----------------------------
+# USER DB
 DB_FILE = "users.json"
 
 def load_users():
@@ -66,9 +66,7 @@ def add_user(uid):
         users.append(uid)
         save_users(users)
 
-# -----------------------------------------------
-# CHECK IF USER JOINED ALL REQUIRED CHANNELS
-# -----------------------------------------------
+# CHECK FORCE JOIN
 async def is_joined_all(user_id, context):
     for channel_id, emoji, link in CHANNELS:
         try:
@@ -79,23 +77,19 @@ async def is_joined_all(user_id, context):
             return False
     return True
 
-# -----------------------------------------------
-# SEND INLINE BUTTON 2×2 GRID FORCE JOIN UI + IMAGE
-# -----------------------------------------------
+# FORCE JOIN UI
 async def send_force_join(update, context):
 
     keyboard = [
         [
-            InlineKeyboardButton(text=f"{CHANNELS[0][1]} Join", url=CHANNELS[0][2]),
-            InlineKeyboardButton(text=f"{CHANNELS[1][1]} Join", url=CHANNELS[1][2]),
+            InlineKeyboardButton(f"{CHANNELS[0][1]} Join", url=CHANNELS[0][2]),
+            InlineKeyboardButton(f"{CHANNELS[1][1]} Join", url=CHANNELS[1][2]),
         ],
         [
-            InlineKeyboardButton(text=f"{CHANNELS[2][1]} Join", url=CHANNELS[2][2]),
-            InlineKeyboardButton(text=f"{CHANNELS[3][1]} Join", url=CHANNELS[3][2]),
+            InlineKeyboardButton(f"{CHANNELS[2][1]} Join", url=CHANNELS[2][2]),
+            InlineKeyboardButton(f"{CHANNELS[3][1]} Join", url=CHANNELS[3][2]),
         ],
-        [
-            InlineKeyboardButton(text="⭕ JOINED ❌", callback_data="check_join")
-        ]
+        [InlineKeyboardButton("⭕ JOINED ❌", callback_data="check_join")]
     ]
 
     await update.message.reply_photo(
@@ -105,24 +99,18 @@ async def send_force_join(update, context):
         parse_mode="Markdown"
     )
 
-# -----------------------------------------------
-# START COMMAND (WELCOME OR STATUS BASED ON JOIN)
-# -----------------------------------------------
+# /start command
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    add_user(user_id)  # Save to database
+    add_user(user_id)
 
-    # If NOT joined => show force join banner
     if not await is_joined_all(user_id, context):
         await send_force_join(update, context)
         return
 
-    # If already joined => show bot status message
     await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
 
-# -----------------------------------------------
-# CALLBACK: WHEN USER PRESSES "JOINED"
-# -----------------------------------------------
+# FIXED CALLBACK HANDLER
 async def callback_handler(update, context):
     query = update.callback_query
     await query.answer()
@@ -139,18 +127,20 @@ async def callback_handler(update, context):
         )
         return
 
-    # If joined successfully → change button
+    # Update button to JOINED ✔
     await query.edit_message_reply_markup(
         InlineKeyboardMarkup(
-            [[InlineKeyboardButton(text="🟢 JOINED ✔", callback_data="none")]]
+            [[InlineKeyboardButton("🟢 JOINED ✔", callback_data="none")]]
         )
     )
 
-    await query.message.reply_text("✅ Verified! You can now use the bot.")
+    # Send verification message separately
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="✅ Verified! You can now use the bot."
+    )
 
-# -----------------------------------------------
-# AI FUNCTION
-# -----------------------------------------------
+# AI Reply
 async def ai_response(text):
     try:
         completion = client.chat.completions.create(
@@ -164,9 +154,7 @@ async def ai_response(text):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-# -----------------------------------------------
-# MAIN MESSAGE HANDLER
-# -----------------------------------------------
+# Main handler
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     add_user(user_id)
@@ -178,12 +166,9 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💬 Working on it...")
 
     reply = await ai_response(update.message.text)
-
     await update.message.reply_text(reply)
 
-# -----------------------------------------------
-# BROADCAST COMMAND
-# -----------------------------------------------
+# /broadcast command
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user.id
 
@@ -208,20 +193,51 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for uid in users:
         try:
-            await context.bot.send_message(chat_id=uid, text=styled, parse_mode="Markdown")
+            await context.bot.send_message(uid, styled, parse_mode="Markdown")
             sent += 1
         except:
             pass
 
     await update.message.reply_text(f"✅ Broadcast sent to {sent} users.")
 
-# -----------------------------------------------
+# /help command
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+🛠 **Sevr0c–Moros AI Commands**
+━━━━━━━━━━━━━━━━━━
+/start – Start the bot or check status
+/help – Show all command info
+/about – About the bot & creators
+/broadcast – Owner-only broadcast
+
+⚠️ Join all required channels to use the bot.
+"""
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+# /about command
+async def about_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    about_text = """
+💀 **Sevr0c–Moros AI**
+━━━━━━━━━━━━━━━━━━
+⚡ High-performance AI bot  
+🔥 Ethical hacking | Scripts | Tools  
+💠 Built for speed & utility
+
+👑 **Creators:**
+• Owner – @iamorosss ( Head )
+• Admin - @sevr0c ( admin )
+
+⚠️ Educational & ethical use only.
+"""
+    await update.message.reply_text(about_text, parse_mode="Markdown")
+
 # RUN BOT
-# -----------------------------------------------
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CommandHandler("help", help_cmd))
+app.add_handler(CommandHandler("about", about_cmd))
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_msg))
 
