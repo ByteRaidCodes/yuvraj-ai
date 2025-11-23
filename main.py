@@ -1,4 +1,5 @@
 import os
+import json
 os.system("pip install openai==1.30.0 python-telegram-bot==20.3")
 
 from openai import OpenAI
@@ -9,6 +10,9 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, Con
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
+
+# OWNER IDS (AS YOU GAVE ME)
+OWNER_IDS = [8180209483, 7926496057]
 
 # Banner image (PostImages direct link)
 PHOTO_PATH = "https://i.postimg.cc/76L59xVj/03cf19b6-e979-4d2f-9d6f-3ba2469e60c2.jpg"
@@ -44,6 +48,23 @@ STATUS_MSG = """
 🟢 No maintenance
 🔥 All features working
 """
+
+# ---------------------------- USER DATABASE ----------------------------
+DB_FILE = "users.json"
+
+def load_users():
+    if not os.path.exists(DB_FILE):
+        return []
+    return json.load(open(DB_FILE, "r"))
+
+def save_users(users):
+    json.dump(users, open(DB_FILE, "w"))
+
+def add_user(uid):
+    users = load_users()
+    if uid not in users:
+        users.append(uid)
+        save_users(users)
 
 # -----------------------------------------------
 # CHECK IF USER JOINED ALL REQUIRED CHANNELS
@@ -89,6 +110,7 @@ async def send_force_join(update, context):
 # -----------------------------------------------
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
+    add_user(user_id)  # Save to database
 
     # If NOT joined => show force join banner
     if not await is_joined_all(user_id, context):
@@ -106,6 +128,8 @@ async def callback_handler(update, context):
     await query.answer()
 
     user = query.from_user.id
+    add_user(user)
+
     joined = await is_joined_all(user, context)
 
     if not joined:
@@ -144,8 +168,8 @@ async def ai_response(text):
 # MAIN MESSAGE HANDLER
 # -----------------------------------------------
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     user_id = update.message.from_user.id
+    add_user(user_id)
 
     if not await is_joined_all(user_id, context):
         await send_force_join(update, context)
@@ -158,11 +182,46 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
 
 # -----------------------------------------------
+# BROADCAST COMMAND
+# -----------------------------------------------
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user.id
+
+    if user not in OWNER_IDS:
+        await update.message.reply_text("❌ You are not allowed to use broadcast.")
+        return
+
+    if len(context.args) == 0:
+        await update.message.reply_text("Usage:\n/broadcast your message here")
+        return
+
+    message = " ".join(context.args)
+
+    styled = f"""
+📢 **Sevr0c–Moros AI Broadcast**
+━━━━━━━━━━━━━━━━━━
+{message}
+"""
+
+    users = load_users()
+    sent = 0
+
+    for uid in users:
+        try:
+            await context.bot.send_message(chat_id=uid, text=styled, parse_mode="Markdown")
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(f"✅ Broadcast sent to {sent} users.")
+
+# -----------------------------------------------
 # RUN BOT
 # -----------------------------------------------
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start_cmd))
+app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_msg))
 
