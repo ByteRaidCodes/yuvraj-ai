@@ -1,4 +1,5 @@
 import os
+os.system("pip install openai==1.30.0 python-telegram-bot==20.3")
 from openai import OpenAI
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
@@ -34,3 +35,4 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_msg))
 app.run_polling()
+
