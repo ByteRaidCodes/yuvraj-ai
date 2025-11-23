@@ -10,6 +10,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
 
+# Banner image (PostImages direct link)
+PHOTO_PATH = "https://i.postimg.cc/76L59xVj/03cf19b6-e979-4d2f-9d6f-3ba2469e60c2.jpg"
+
 # --- 4 CHANNEL FORCE JOIN SETTINGS ---
 CHANNELS = [
     (-1002090323246, "⚡", "https://t.me/CodeTweakz"),
@@ -17,6 +20,21 @@ CHANNELS = [
     (-1003279886990, "💎", "https://t.me/techmoros"),
     (-1002733321153, "🚀", "https://t.me/MethRoot"),
 ]
+
+# Custom caption you provided
+CAPTION = """
+💀 **Welcome to the Sevr0c–Moros AI ⚡**
+
+Inside this channel, you’ll get access to advanced scripts, ethical hacking tutorials, powerful methods, hidden tricks, important security tools, active lessons, and real techniques used by professionals.
+
+We drop content that actually works — no fake stuff, no useless noise.
+
+If you want practical hacking knowledge, real-world tips, updated methods, and exclusive scripts, this is the right place.
+
+⚠️ **Everything taught here is for ethical & educational purposes only.**
+
+👉 **Join now and unlock the skills others hide.**
+"""
 
 # -----------------------------------------------
 # CHECK IF USER JOINED ALL REQUIRED CHANNELS
@@ -36,7 +54,7 @@ async def is_joined_all(update, context):
 
 
 # -----------------------------------------------
-# SEND INLINE BUTTON 2×2 GRID FORCE JOIN UI
+# SEND INLINE BUTTON 2×2 GRID FORCE JOIN UI + IMAGE
 # -----------------------------------------------
 async def send_force_join(update):
 
@@ -54,9 +72,9 @@ async def send_force_join(update):
         ]
     ]
 
-    await update.message.reply_text(
-        "**📢 Must Join All Channels Before Using The Bot**\n"
-        "Please join all channels below and then tap **JOINED**:",
+    await update.message.reply_photo(
+        photo=PHOTO_PATH,
+        caption=CAPTION,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
