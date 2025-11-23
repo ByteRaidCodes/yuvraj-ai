@@ -11,10 +11,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
 
-# OWNERS
+# OWNER IDS
 OWNER_IDS = [8180209483, 7926496057]
 
-# Force-join banner image
+# Banner image
 PHOTO_PATH = "https://i.postimg.cc/76L59xVj/03cf19b6-e979-4d2f-9d6f-3ba2469e60c2.jpg"
 
 # Force join channels
@@ -25,28 +25,47 @@ CHANNELS = [
     (-1002733321153, "🚀", "https://t.me/MethRoot"),
 ]
 
-# Caption on force-join
+# Caption for force join
 CAPTION = """
 💀 **Welcome to the Sevr0c–Moros AI ⚡**
+Inside this channel, you'll get access to advanced scripts, ethical hacking tutorials, powerful methods, hidden tricks, security tools, and real techniques used by professionals.
 
-Inside this channel, you’ll get access to advanced scripts, ethical hacking tutorials,
-powerful methods, hidden tricks, important security tools, active lessons, and real
-techniques used by professionals.
-
-We drop content that actually works — no fake stuff, no useless noise.
-
-⚠️ **Everything taught here is for ethical & educational purposes only.**
-
-👉 **Join now and unlock the skills others hide.**
+⚠️ **Everything is for educational use only.**
+👉 Join all channels to unlock everything.
 """
 
-# Status message
+# Status response
 STATUS_MSG = """
 💀 Sevr0c–Moros AI Status
 ━━━━━━━━━━━━━━━━━━
 ⚡ Bot is LIVE
 🟢 No maintenance
 🔥 All features working
+"""
+
+# Help menu
+HELP_MSG = """
+🛠 **Sevr0c–Moros AI Help Menu**
+━━━━━━━━━━━━━━━━━━
+/start – Start bot / check status
+/help – List all commands
+/about – About this bot
+/broadcast – Owner-only (send message to all users)
+"""
+
+# About menu
+ABOUT_MSG = """
+💀 **Sevr0c–Moros AI**
+━━━━━━━━━━━━━━━━━━
+⚡ High-performance AI bot  
+🔥 Ethical hacking | Tools | Scripts  
+💠 Optimized for speed & accuracy  
+
+👑 **Creators:**
+• Owner – @iamorosss  
+• Admin – @sevr0c  
+
+⚠️ Educational & ethical use only.
 """
 
 # Database file
@@ -66,9 +85,9 @@ def add_user(uid):
         users.append(uid)
         save_users(users)
 
-# Check join status
+# Check if user joined all channels
 async def is_joined_all(user_id, context):
-    for channel_id, em, link in CHANNELS:
+    for channel_id, emoji, link in CHANNELS:
         try:
             member = await context.bot.get_chat_member(channel_id, user_id)
             if member.status in ["left", "kicked"]:
@@ -77,17 +96,16 @@ async def is_joined_all(user_id, context):
             return False
     return True
 
-# Send force join UI
+# Send force join panel
 async def send_force_join(update, context):
-
     keyboard = [
         [
-            InlineKeyboardButton(f"{CHANNELS[0][1]} Join", url=CHANNELS[0][2]),
-            InlineKeyboardButton(f"{CHANNELS[1][1]} Join", url=CHANNELS[1][2]),
+            InlineKeyboardButton("⚡ Join", url=CHANNELS[0][2]),
+            InlineKeyboardButton("🔥 Join", url=CHANNELS[1][2]),
         ],
         [
-            InlineKeyboardButton(f"{CHANNELS[2][1]} Join", url=CHANNELS[2][2]),
-            InlineKeyboardButton(f"{CHANNELS[3][1]} Join", url=CHANNELS[3][2]),
+            InlineKeyboardButton("💎 Join", url=CHANNELS[2][2]),
+            InlineKeyboardButton("🚀 Join", url=CHANNELS[3][2]),
         ],
         [InlineKeyboardButton("⭕ JOINED ❌", callback_data="check_join")]
     ]
@@ -99,7 +117,7 @@ async def send_force_join(update, context):
         parse_mode="Markdown"
     )
 
-# /start
+# /start command
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     add_user(user_id)
@@ -110,7 +128,7 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
 
-# JOINED button callback
+# Callback JOIN check
 async def callback_handler(update, context):
     query = update.callback_query
     await query.answer()
@@ -118,20 +136,12 @@ async def callback_handler(update, context):
     user = query.from_user.id
     add_user(user)
 
-    joined = await is_joined_all(user, context)
-
-    if not joined:
-        await query.answer(
-            "❌ You have not joined ALL channels!\nJoin all and tap JOINED again.",
-            show_alert=True
-        )
+    if not await is_joined_all(user, context):
+        await query.answer("❌ You haven't joined all channels!", show_alert=True)
         return
 
-    # turn button green
     await query.edit_message_reply_markup(
-        InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🟢 JOINED ✔", callback_data="none")]]
-        )
+        InlineKeyboardMarkup([[InlineKeyboardButton("🟢 JOINED ✔", callback_data="none")]])
     )
 
     await context.bot.send_message(
@@ -139,7 +149,7 @@ async def callback_handler(update, context):
         text="✅ Verified! You can now use the bot."
     )
 
-# AI reply
+# AI replying
 async def ai_response(text):
     try:
         completion = client.chat.completions.create(
@@ -153,91 +163,55 @@ async def ai_response(text):
     except Exception as e:
         return f"❌ Error: {e}"
 
-# main messages
-async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    add_user(user_id)
+# Fallback command handler (ALWAYS WORKS)
+async def fallback_commands(update, context):
+    text = update.message.text.lower()
 
-    if not await is_joined_all(user_id, context):
-        await send_force_join(update, context)
+    if text.startswith("/help"):
+        await update.message.reply_text(HELP_MSG, parse_mode="Markdown")
         return
 
-    await update.message.reply_text("💬 Working on it...")
+    if text.startswith("/about"):
+        await update.message.reply_text(ABOUT_MSG, parse_mode="Markdown")
+        return
 
+    # AI reply
     reply = await ai_response(update.message.text)
     await update.message.reply_text(reply)
 
-# broadcast
+# /broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user.id
 
     if user not in OWNER_IDS:
-        await update.message.reply_text("❌ You are not allowed to use broadcast.")
+        await update.message.reply_text("❌ Only owners can use broadcast.")
         return
 
     if len(context.args) == 0:
-        await update.message.reply_text("Usage:\n/broadcast your message")
+        await update.message.reply_text("Usage:\n/broadcast your text")
         return
 
-    message = " ".join(context.args)
-
-    styled = f"""
-📢 **Sevr0c–Moros AI Broadcast**
-━━━━━━━━━━━━━━━━━━
-{message}
-"""
+    msg = " ".join(context.args)
 
     users = load_users()
     sent = 0
-
     for uid in users:
         try:
-            await context.bot.send_message(uid, styled, parse_mode="Markdown")
+            await context.bot.send_message(uid, f"📢 **Broadcast:**\n{msg}", parse_mode="Markdown")
             sent += 1
         except:
             pass
 
-    await update.message.reply_text(f"✅ Broadcast sent to {sent} users.")
-
-# /help
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """
-🛠 **Sevr0c–Moros AI Commands**
-━━━━━━━━━━━━━━━━━━
-/start – Start the bot or check status  
-/help – Show all commands  
-/about – About the bot & creators  
-/broadcast – Owner-only broadcast  
-
-⚠️ Join all required channels to use the bot.
-"""
-    await update.message.reply_text(help_text, parse_mode="Markdown")
-
-# /about
-async def about_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    about_text = """
-💀 **Sevr0c–Moros AI**
-━━━━━━━━━━━━━━━━━━
-⚡ High-performance AI bot  
-🔥 Ethical hacking | Scripts | Tools  
-💠 Built for speed & utility  
-
-👑 **Creators:**  
-• Owner – @iamorosss (Head)  
-• Admin – @sevr0c (Admin)
-
-⚠️ Educational & ethical use only.
-"""
-    await update.message.reply_text(about_text, parse_mode="Markdown")
+    await update.message.reply_text(f"✅ Sent to {sent} users.")
 
 # RUN BOT
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("help", help_cmd))
-app.add_handler(CommandHandler("about", about_cmd))
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
+
+# Fallback command handler for help/about always works
+app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), fallback_commands))
 
 app.run_polling()
