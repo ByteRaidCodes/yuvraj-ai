@@ -3,7 +3,7 @@ os.system("pip install openai==1.30.0 python-telegram-bot==20.3")
 
 from openai import OpenAI
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters, CallbackQueryHandler
 
 # Load tokens safely
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -36,12 +36,19 @@ If you want practical hacking knowledge, real-world tips, updated methods, and e
 👉 **Join now and unlock the skills others hide.**
 """
 
+# status message for users who already joined
+STATUS_MSG = """
+💀 Sevr0c–Moros AI Status
+━━━━━━━━━━━━━━━━━━
+⚡ Bot is LIVE
+🟢 No maintenance
+🔥 All features working
+"""
+
 # -----------------------------------------------
 # CHECK IF USER JOINED ALL REQUIRED CHANNELS
 # -----------------------------------------------
-async def is_joined_all(update, context):
-    user_id = update.message.from_user.id
-
+async def is_joined_all(user_id, context):
     for channel_id, emoji, link in CHANNELS:
         try:
             member = await context.bot.get_chat_member(channel_id, user_id)
@@ -49,14 +56,12 @@ async def is_joined_all(update, context):
                 return False
         except:
             return False
-
     return True
-
 
 # -----------------------------------------------
 # SEND INLINE BUTTON 2×2 GRID FORCE JOIN UI + IMAGE
 # -----------------------------------------------
-async def send_force_join(update):
+async def send_force_join(update, context):
 
     keyboard = [
         [
@@ -79,6 +84,19 @@ async def send_force_join(update):
         parse_mode="Markdown"
     )
 
+# -----------------------------------------------
+# START COMMAND (WELCOME OR STATUS BASED ON JOIN)
+# -----------------------------------------------
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+
+    # If NOT joined => show force join banner
+    if not await is_joined_all(user_id, context):
+        await send_force_join(update, context)
+        return
+
+    # If already joined => show bot status message
+    await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
 
 # -----------------------------------------------
 # CALLBACK: WHEN USER PRESSES "JOINED"
@@ -87,29 +105,17 @@ async def callback_handler(update, context):
     query = update.callback_query
     await query.answer()
 
-    # user pressed the JOINED button → verify membership
     user = query.from_user.id
+    joined = await is_joined_all(user, context)
 
-    all_joined = True
-    for channel_id, emoji, link in CHANNELS:
-        try:
-            member = await context.bot.get_chat_member(channel_id, user)
-            if member.status in ["left", "kicked"]:
-                all_joined = False
-                break
-        except:
-            all_joined = False
-            break
-
-    # If NOT joined → show POPUP alert
-    if not all_joined:
+    if not joined:
         await query.answer(
             "❌ You have not joined ALL channels!\nJoin all and tap JOINED again.",
             show_alert=True
         )
         return
 
-    # If joined successfully → convert to green success button
+    # If joined successfully → change button
     await query.edit_message_reply_markup(
         InlineKeyboardMarkup(
             [[InlineKeyboardButton(text="🟢 JOINED ✔", callback_data="none")]]
@@ -117,7 +123,6 @@ async def callback_handler(update, context):
     )
 
     await query.message.reply_text("✅ Verified! You can now use the bot.")
-
 
 # -----------------------------------------------
 # AI FUNCTION
@@ -135,32 +140,29 @@ async def ai_response(text):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-
 # -----------------------------------------------
 # MAIN MESSAGE HANDLER
 # -----------------------------------------------
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # 🔒 FORCE JOIN CHECK
-    if not await is_joined_all(update, context):
-        await send_force_join(update)
+    user_id = update.message.from_user.id
+
+    if not await is_joined_all(user_id, context):
+        await send_force_join(update, context)
         return
 
-    # Typing message
     await update.message.reply_text("💬 Working on it...")
 
-    # Get AI response
     reply = await ai_response(update.message.text)
 
-    # Final send
     await update.message.reply_text(reply)
-
 
 # -----------------------------------------------
 # RUN BOT
 # -----------------------------------------------
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_msg))
 
