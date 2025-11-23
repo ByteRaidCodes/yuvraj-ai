@@ -27,7 +27,7 @@ async def ai_response(text):
 
 # Message handler
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Yuvraj AI is typing...")
+    await update.message.reply_text("💬 Working on it...")
     reply = await ai_response(update.message.text)
     await update.message.reply_text(reply)
 
@@ -35,4 +35,5 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_msg))
 app.run_polling()
+
 
