@@ -1,6 +1,9 @@
 import os
 import json
-os.system("pip install openai==1.30.0 python-telegram-bot==20.3")
+import requests
+import socket
+import dns.resolver
+os.system("pip install openai==1.30.0 python-telegram-bot==20.3 dnspython")
 
 from openai import OpenAI
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -30,6 +33,7 @@ CAPTION = """
 💀 **Welcome to the Sevr0c–Moros AI ⚡**
 Join all channels to access tools, scripts, & hacking resources.
 """
+
 STATUS_MSG = """
 💀 Sevr0c–Moros AI Status
 ━━━━━━━━━━━━━━━━━━
@@ -37,16 +41,20 @@ STATUS_MSG = """
 🟢 No maintenance
 🔥 All features working
 """
+
 HELP_MSG = """
 🛠 **Sevr0c–Moros AI Help**
 /help – show commands
 /about – about the bot
 /start – status
+/osint – open OSINT tools menu
 """
+
 ABOUT_MSG = """
 💀 **Sevr0c–Moros AI**
 Made by: @iamorosss & @sevr0c
-Educational use only.
+
+⚠️ Educational use only.
 """
 
 # User DB
@@ -65,6 +73,97 @@ def add_user(uid):
     if uid not in users:
         users.append(uid)
         save_users(users)
+
+# Pending OSINT input
+pending_osint = {}
+
+# ---------------- OSINT MENU ---------------- #
+
+def osint_menu():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🌐 IP Lookup", callback_data="osint_ip"),
+            InlineKeyboardButton("📞 Phone Info", callback_data="osint_phone"),
+        ],
+        [
+            InlineKeyboardButton("📧 Email Check", callback_data="osint_email"),
+            InlineKeyboardButton("👤 Username OSINT", callback_data="osint_user"),
+        ],
+        [
+            InlineKeyboardButton("🌍 Domain Lookup", callback_data="osint_domain"),
+            InlineKeyboardButton("⬅️ Back", callback_data="osint_back"),
+        ]
+    ])
+
+async def osint_input_handler(update, context, tool):
+    text = update.message.text
+
+    if tool == "ip":
+        try:
+            r = requests.get(f"http://ip-api.com/json/{text}").json()
+            reply = f"""
+🌐 **IP Lookup Result**
+Country: {r.get('country')}
+Region: {r.get('regionName')}
+City: {r.get('city')}
+ZIP: {r.get('zip')}
+ISP: {r.get('isp')}
+"""
+        except:
+            reply = "❌ Invalid IP / API error."
+        return reply
+
+    if tool == "phone":
+        reply = f"""
+📞 **Phone Lookup**
+Number: {text}
+⚠️ Demo result only:
+Country: India
+Carrier: Airtel
+Valid: True
+"""
+        return reply
+
+    if tool == "email":
+        domain = text.split("@")[-1]
+        try:
+            dns.resolver.resolve(domain, "MX")
+            valid = True
+        except:
+            valid = False
+        reply = f"""
+📧 **Email Check**
+Email: {text}
+Domain Valid: {"Yes" if valid else "No"}
+"""
+        return reply
+
+    if tool == "user":
+        reply = f"""
+👤 **Username OSINT**
+Username: {text}
+
+Instagram: https://instagram.com/{text}
+GitHub: https://github.com/{text}
+Twitter: https://twitter.com/{text}
+Reddit: https://reddit.com/u/{text}
+TikTok: https://tiktok.com/@{text}
+"""
+        return reply
+
+    if tool == "domain":
+        try:
+            ip = socket.gethostbyname(text)
+        except:
+            ip = "Error"
+        reply = f"""
+🌍 **Domain Lookup**
+Domain: {text}
+IP: {ip}
+"""
+        return reply
+
+# ------------------------------------------------ #
 
 # Check join
 async def is_joined_all(user_id, context):
@@ -97,12 +196,27 @@ async def send_force_join(update, context):
         parse_mode="Markdown"
     )
 
-# Callback JOIN button
+# Callback JOIN button + OSINT buttons
 async def callback_handler(update, context):
     q = update.callback_query
-    await q.answer()
     user = q.from_user.id
+    data = q.data
 
+    await q.answer()
+
+    # OSINT CALLBACKS
+    if data.startswith("osint_"):
+        tool = data.replace("osint_", "")
+
+        if tool == "back":
+            await context.bot.send_message(q.message.chat_id, "OSINT Menu:", reply_markup=osint_menu())
+            return
+
+        pending_osint[user] = tool
+        await context.bot.send_message(q.message.chat_id, f"🔍 Enter data for **{tool}**:")
+        return
+
+    # FORCE JOIN CHECK
     if not await is_joined_all(user, context):
         await q.answer("❌ Not joined all!", show_alert=True)
         return
@@ -126,17 +240,25 @@ async def ai_response(text):
     except Exception as e:
         return f"❌ Error: {e}"
 
-# 👉 MAIN HANDLER (commands + AI combined)
+# MAIN HANDLER
 async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
     uid = update.message.from_user.id
+
     add_user(uid)
 
     if not await is_joined_all(uid, context):
         await send_force_join(update, context)
         return
 
-    # COMMANDS — detected manually (WORKS 100%)
+    # OSINT input handler
+    if uid in pending_osint:
+        tool = pending_osint.pop(uid)
+        result = await osint_input_handler(update, context, tool)
+        await update.message.reply_text(result, parse_mode="Markdown")
+        return
+
+    # Commands
     if msg.startswith("/start"):
         await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
         return
@@ -149,10 +271,15 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(ABOUT_MSG, parse_mode="Markdown")
         return
 
+    if msg.startswith("/osint"):
+        await update.message.reply_text("🛰️ **OSINT Tools Menu**", reply_markup=osint_menu(), parse_mode="Markdown")
+        return
+
     if msg.startswith("/broadcast"):
         if uid not in OWNER_IDS:
             await update.message.reply_text("❌ Not allowed.")
             return
+
         text = msg.replace("/broadcast", "").strip()
         users = load_users()
         count = 0
@@ -162,16 +289,17 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 count += 1
             except:
                 pass
+
         await update.message.reply_text(f"Broadcast sent to {count} users.")
         return
 
-    # AI process
+    # AI reply
     await update.message.reply_text("💬 Working on it...")
     reply = await ai_response(msg)
     await update.message.reply_text(reply)
 
 # RUN BOT
 app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
+app.add_handler(CallbackQueryHandler(callback_handler))
 app.add_handler(MessageHandler(filters.TEXT, main_handler))
 app.run_polling()
