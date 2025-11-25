@@ -30,6 +30,7 @@ CAPTION = """
 💀 **Welcome to the Sevr0c–Moros AI ⚡**
 Join all channels to access tools, scripts, & hacking resources.
 """
+
 STATUS_MSG = """
 💀 Sevr0c–Moros AI Status
 ━━━━━━━━━━━━━━━━━━
@@ -37,12 +38,15 @@ STATUS_MSG = """
 🟢 No maintenance
 🔥 All features working
 """
+
 HELP_MSG = """
 🛠 **Sevr0c–Moros AI Help**
 /help – show commands
 /about – about the bot
 /start – status
+Memory: bot remembers your name & chat context.
 """
+
 ABOUT_MSG = """
 💀 **Sevr0c–Moros AI**
 Made by: @iamorosss & @sevr0c
@@ -51,6 +55,7 @@ Educational use only.
 
 # User DB
 DB_FILE = "users.json"
+MEMORY_FILE = "memory.json"
 
 def load_users():
     if not os.path.exists(DB_FILE):
@@ -65,6 +70,44 @@ def add_user(uid):
     if uid not in users:
         users.append(uid)
         save_users(users)
+
+# MEMORY HANDLING
+def load_memory():
+    if not os.path.exists(MEMORY_FILE):
+        return {}
+    return json.load(open(MEMORY_FILE))
+
+def save_memory(data):
+    json.dump(data, open(MEMORY_FILE, "w"))
+
+# ADD MESSAGE TO MEMORY
+def remember(uid, role, message):
+    memory = load_memory()
+    if str(uid) not in memory:
+        memory[str(uid)] = {"name": None, "history": []}
+
+    memory[str(uid)]["history"].append({"role": role, "content": message})
+
+    # Keep only last 5 messages
+    memory[str(uid)]["history"] = memory[str(uid)]["history"][-5:]
+
+    save_memory(memory)
+
+# SET USER NAME MEMORY
+def set_username(uid, name):
+    memory = load_memory()
+    if str(uid) not in memory:
+        memory[str(uid)] = {"name": name, "history": []}
+    else:
+        memory[str(uid)]["name"] = name
+    save_memory(memory)
+
+# GET MEMORY HISTORY
+def get_memory(uid):
+    memory = load_memory()
+    if str(uid) not in memory:
+        return None
+    return memory[str(uid)]
 
 # Check join
 async def is_joined_all(user_id, context):
@@ -90,6 +133,7 @@ async def send_force_join(update, context):
         ],
         [InlineKeyboardButton("⭕ JOINED ❌", callback_data="check_join")]
     ]
+
     await update.message.reply_photo(
         photo=PHOTO_PATH,
         caption=CAPTION,
@@ -110,23 +154,50 @@ async def callback_handler(update, context):
     await q.edit_message_reply_markup(
         InlineKeyboardMarkup([[InlineKeyboardButton("🟢 JOINED ✔", callback_data="done")]])
     )
+
     await context.bot.send_message(q.message.chat_id, "✅ Verified! You can now use the bot.")
 
-# AI respond
-async def ai_response(text):
+# AI TEXT RESPONSE WITH MEMORY
+async def ai_response(uid, text):
+    memory = get_memory(uid)
+
+    # detect rename: "call me <name>"
+    if text.lower().startswith("call me "):
+        name = text[8:].strip()
+        set_username(uid, name)
+        return f"🔥 Okay! I will remember that your name is **{name}**."
+
+    # system + memory + current msg
+    messages = [
+        {"role": "system", "content": "You are Yuvraj AI created by Yuvraj."}
+    ]
+
+    if memory:
+        if memory["name"]:
+            messages.append({"role": "system", "content": f"User's name is {memory['name']}."})
+
+        for item in memory["history"]:
+            messages.append(item)
+
+    messages.append({"role": "user", "content": text})
+
     try:
         out = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are Yuvraj AI created by Yuvraj."},
-                {"role": "user", "content": text}
-            ]
+            model="gpt-4.1-mini",
+            messages=messages
         )
-        return out.choices[0].message.content
-    except Exception as e:
-        return f"❌ Error: {e}"
 
-# 👉 MAIN HANDLER (commands + AI combined)
+        reply = out.choices[0].message.content
+
+        remember(uid, "user", text)
+        remember(uid, "assistant", reply)
+
+        return reply
+
+    except Exception as e:
+        return f"❌ AI Error: {e}"
+
+# MAIN HANDLER
 async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
     uid = update.message.from_user.id
@@ -136,7 +207,7 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_force_join(update, context)
         return
 
-    # COMMANDS — detected manually (WORKS 100%)
+    # COMMANDS
     if msg.startswith("/start"):
         await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
         return
@@ -149,26 +220,30 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(ABOUT_MSG, parse_mode="Markdown")
         return
 
+    # BROADCAST
     if msg.startswith("/broadcast"):
         if uid not in OWNER_IDS:
             await update.message.reply_text("❌ Not allowed.")
             return
+
         text = msg.replace("/broadcast", "").strip()
         users = load_users()
         count = 0
+
         for u in users:
             try:
                 await context.bot.send_message(u, f"📢 {text}")
                 count += 1
             except:
                 pass
+
         await update.message.reply_text(f"Broadcast sent to {count} users.")
         return
 
-    # AI process
-    await update.message.reply_text("💬 Working on it...")
-    reply = await ai_response(msg)
-    await update.message.reply_text(reply)
+    # NORMAL AI CHAT
+    await update.message.reply_text("💬 Thinking...")
+    reply = await ai_response(uid, msg)
+    await update.message.reply_text(reply, parse_mode="Markdown")
 
 # RUN BOT
 app = ApplicationBuilder().token(BOT_TOKEN).build()
