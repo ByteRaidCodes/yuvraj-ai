@@ -53,9 +53,45 @@ Made by: @iamorosss & @sevr0c
 Educational use only.
 """
 
-# User DB
+# DB files
 DB_FILE = "users.json"
 MEMORY_FILE = "memory.json"
+
+# ---------------- MEMORY SYSTEM ----------------
+
+def load_memory():
+    if not os.path.exists(MEMORY_FILE):
+        return {}
+    return json.load(open(MEMORY_FILE))
+
+def save_memory(data):
+    json.dump(data, open(MEMORY_FILE, "w"))
+
+def remember(uid, role, message):
+    memory = load_memory()
+    if str(uid) not in memory:
+        memory[str(uid)] = {"name": None, "history": []}
+
+    memory[str(uid)]["history"].append({"role": role, "content": message})
+    memory[str(uid)]["history"] = memory[str(uid)]["history"][-5:]   # last 5 msgs only
+
+    save_memory(memory)
+
+def set_username(uid, name):
+    memory = load_memory()
+    if str(uid) not in memory:
+        memory[str(uid)] = {"name": name, "history": []}
+    else:
+        memory[str(uid)]["name"] = name
+    save_memory(memory)
+
+def get_memory(uid):
+    memory = load_memory()
+    if str(uid) not in memory:
+        return None
+    return memory[str(uid)]
+
+# ---------------- USER SYSTEM ----------------
 
 def load_users():
     if not os.path.exists(DB_FILE):
@@ -71,56 +107,18 @@ def add_user(uid):
         users.append(uid)
         save_users(users)
 
-# MEMORY HANDLING
-def load_memory():
-    if not os.path.exists(MEMORY_FILE):
-        return {}
-    return json.load(open(MEMORY_FILE))
+# ---------------- FORCE JOIN ----------------
 
-def save_memory(data):
-    json.dump(data, open(MEMORY_FILE, "w"))
-
-# ADD MESSAGE TO MEMORY
-def remember(uid, role, message):
-    memory = load_memory()
-    if str(uid) not in memory:
-        memory[str(uid)] = {"name": None, "history": []}
-
-    memory[str(uid)]["history"].append({"role": role, "content": message})
-
-    # Keep only last 5 messages
-    memory[str(uid)]["history"] = memory[str(uid)]["history"][-5:]
-
-    save_memory(memory)
-
-# SET USER NAME MEMORY
-def set_username(uid, name):
-    memory = load_memory()
-    if str(uid) not in memory:
-        memory[str(uid)] = {"name": name, "history": []}
-    else:
-        memory[str(uid)]["name"] = name
-    save_memory(memory)
-
-# GET MEMORY HISTORY
-def get_memory(uid):
-    memory = load_memory()
-    if str(uid) not in memory:
-        return None
-    return memory[str(uid)]
-
-# Check join
 async def is_joined_all(user_id, context):
     for cid, emoji, url in CHANNELS:
         try:
-            member = await context.bot.get_chat_member(cid, user_id)
-            if member.status in ["left", "kicked"]:
+            m = await context.bot.get_chat_member(cid, user_id)
+            if m.status in ["left", "kicked"]:
                 return False
         except:
             return False
     return True
 
-# Force join UI
 async def send_force_join(update, context):
     keyboard = [
         [
@@ -141,13 +139,12 @@ async def send_force_join(update, context):
         parse_mode="Markdown"
     )
 
-# Callback JOIN button
 async def callback_handler(update, context):
     q = update.callback_query
     await q.answer()
-    user = q.from_user.id
+    uid = q.from_user.id
 
-    if not await is_joined_all(user, context):
+    if not await is_joined_all(uid, context):
         await q.answer("❌ Not joined all!", show_alert=True)
         return
 
@@ -157,20 +154,19 @@ async def callback_handler(update, context):
 
     await context.bot.send_message(q.message.chat_id, "✅ Verified! You can now use the bot.")
 
-# AI TEXT RESPONSE WITH MEMORY
+# ---------------- AI SYSTEM ----------------
+
 async def ai_response(uid, text):
     memory = get_memory(uid)
 
-    # detect rename: "call me <name>"
+    # detect rename
     if text.lower().startswith("call me "):
         name = text[8:].strip()
         set_username(uid, name)
-        return f"🔥 Okay! I will remember that your name is **{name}**."
+        return f"🔥 Okay! I'll remember your name **{name}**."
 
-    # system + memory + current msg
-    messages = [
-        {"role": "system", "content": "You are Yuvraj AI created by Yuvraj."}
-    ]
+    # build message list for GPT
+    messages = [{"role": "system", "content": "You are Yuvraj AI created by Yuvraj."}]
 
     if memory:
         if memory["name"]:
@@ -197,15 +193,25 @@ async def ai_response(uid, text):
     except Exception as e:
         return f"❌ AI Error: {e}"
 
-# MAIN HANDLER
+# ---------------- MAIN HANDLER ----------------
+
 async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
     uid = update.message.from_user.id
     add_user(uid)
 
+    # Force join check
     if not await is_joined_all(uid, context):
         await send_force_join(update, context)
         return
+
+    # ---------------- FIX: REPLY-TO MESSAGE MEMORY ----------------
+    if update.message.reply_to_message:
+        replied_text = update.message.reply_to_message.text
+        if replied_text:
+            remember(uid, "assistant", replied_text)  # bot's previous answer
+        remember(uid, "user", msg)  # user's reply continuing convo
+    # ---------------------------------------------------------------
 
     # COMMANDS
     if msg.startswith("/start"):
@@ -229,23 +235,22 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = msg.replace("/broadcast", "").strip()
         users = load_users()
         count = 0
-
         for u in users:
             try:
                 await context.bot.send_message(u, f"📢 {text}")
                 count += 1
             except:
                 pass
-
         await update.message.reply_text(f"Broadcast sent to {count} users.")
         return
 
-    # NORMAL AI CHAT
+    # NORMAL CHAT
     await update.message.reply_text("💬 Thinking...")
     reply = await ai_response(uid, msg)
     await update.message.reply_text(reply, parse_mode="Markdown")
 
-# RUN BOT
+# ---------------- RUN BOT ----------------
+
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
 app.add_handler(MessageHandler(filters.TEXT, main_handler))
