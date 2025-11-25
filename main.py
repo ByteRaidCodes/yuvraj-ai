@@ -30,6 +30,7 @@ CAPTION = """
 💀 **Welcome to the Sevr0c–Moros AI ⚡**
 Join all channels to access tools, scripts, & hacking resources.
 """
+
 STATUS_MSG = """
 💀 Sevr0c–Moros AI Status
 ━━━━━━━━━━━━━━━━━━
@@ -37,13 +38,15 @@ STATUS_MSG = """
 🟢 No maintenance
 🔥 All features working
 """
+
 HELP_MSG = """
 🛠 **Sevr0c–Moros AI Help**
 /help – show commands
 /about – about the bot
 /start – status
-/img (prompt) – generate AI images
+/img prompt – generate AI images
 """
+
 ABOUT_MSG = """
 💀 **Sevr0c–Moros AI**
 Made by: @iamorosss & @sevr0c
@@ -91,6 +94,7 @@ async def send_force_join(update, context):
         ],
         [InlineKeyboardButton("⭕ JOINED ❌", callback_data="check_join")]
     ]
+
     await update.message.reply_photo(
         photo=PHOTO_PATH,
         caption=CAPTION,
@@ -111,13 +115,14 @@ async def callback_handler(update, context):
     await q.edit_message_reply_markup(
         InlineKeyboardMarkup([[InlineKeyboardButton("🟢 JOINED ✔", callback_data="done")]])
     )
+
     await context.bot.send_message(q.message.chat_id, "✅ Verified! You can now use the bot.")
 
-# AI respond
+# AI TEXT RESPONSE
 async def ai_response(text):
     try:
         out = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are Yuvraj AI created by Yuvraj."},
                 {"role": "user", "content": text}
@@ -125,13 +130,12 @@ async def ai_response(text):
         )
         return out.choices[0].message.content
     except Exception as e:
-        return f"❌ Error: {e}"
+        return f"❌ AI Error: {e}"
 
-# 📸 IMAGE TO TEXT (VISION)
+# IMAGE → TEXT (VISION)
 async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.message.from_user.id
 
-    # force join check
     if not await is_joined_all(uid, context):
         await send_force_join(update, context)
         return
@@ -143,13 +147,13 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1",
             messages=[
-                {"role": "system", "content": "You are an AI that describes photos and extracts text."},
+                {"role": "system", "content": "Describe the image and extract all text."},
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_text", "text": "Describe this image & extract visible text."},
+                        {"type": "input_text", "text": "Analyze the image."},
                         {"type": "input_image", "image": img_bytes}
                     ]
                 }
@@ -160,14 +164,15 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📄 **Image Result:**\n{result}", parse_mode="Markdown")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
+        await update.message.reply_text(f"❌ Vision Error: {e}")
 
-# 👉 MAIN HANDLER (commands + AI + IMG GEN)
+# MAIN HANDLER
 async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
     uid = update.message.from_user.id
     add_user(uid)
 
+    # FORCE JOIN CHECK
     if not await is_joined_all(uid, context):
         await send_force_join(update, context)
         return
@@ -185,7 +190,7 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(ABOUT_MSG, parse_mode="Markdown")
         return
 
-    # OWNER BROADCAST
+    # BROADCAST
     if msg.startswith("/broadcast"):
         if uid not in OWNER_IDS:
             await update.message.reply_text("❌ Not allowed.")
@@ -205,15 +210,16 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Broadcast sent to {count} users.")
         return
 
-    # IMAGE GENERATOR
+    # IMAGE GENERATION
     if msg.startswith("/img"):
         prompt = msg.replace("/img", "").strip()
 
         if prompt == "":
-            await update.message.reply_text("🖼️ Use: `/img cat wearing sunglasses`", parse_mode="Markdown")
+            await update.message.reply_text("🖼️ Use: `/img cat wearing sunglasses`",
+                                            parse_mode="Markdown")
             return
 
-        await update.message.reply_text("🎨 Creating image... wait 5 sec...")
+        await update.message.reply_text("🎨 Creating image... (5 sec)")
 
         try:
             img = client.images.generate(
@@ -231,10 +237,11 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f"❌ Image Error: {e}")
+
         return
 
-    # AI CHAT
+    # NORMAL AI CHAT
     await update.message.reply_text("💬 Working on it...")
     reply = await ai_response(msg)
     await update.message.reply_text(reply)
