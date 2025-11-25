@@ -42,6 +42,7 @@ HELP_MSG = """
 /help – show commands
 /about – about the bot
 /start – status
+/img (prompt) – generate AI images
 """
 ABOUT_MSG = """
 💀 **Sevr0c–Moros AI**
@@ -126,7 +127,42 @@ async def ai_response(text):
     except Exception as e:
         return f"❌ Error: {e}"
 
-# 👉 MAIN HANDLER (commands + AI combined)
+# 📸 IMAGE TO TEXT (VISION)
+async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.message.from_user.id
+
+    # force join check
+    if not await is_joined_all(uid, context):
+        await send_force_join(update, context)
+        return
+
+    file = await update.message.photo[-1].get_file()
+    img_bytes = await file.download_as_bytearray()
+
+    await update.message.reply_text("🧠 Reading your image...")
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI that describes photos and extracts text."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Describe this image & extract visible text."},
+                        {"type": "input_image", "image": img_bytes}
+                    ]
+                }
+            ]
+        )
+
+        result = response.choices[0].message.content
+        await update.message.reply_text(f"📄 **Image Result:**\n{result}", parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
+# 👉 MAIN HANDLER (commands + AI + IMG GEN)
 async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
     uid = update.message.from_user.id
@@ -136,7 +172,7 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_force_join(update, context)
         return
 
-    # COMMANDS — detected manually (WORKS 100%)
+    # COMMANDS
     if msg.startswith("/start"):
         await update.message.reply_text(STATUS_MSG, parse_mode="Markdown")
         return
@@ -149,23 +185,56 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(ABOUT_MSG, parse_mode="Markdown")
         return
 
+    # OWNER BROADCAST
     if msg.startswith("/broadcast"):
         if uid not in OWNER_IDS:
             await update.message.reply_text("❌ Not allowed.")
             return
+
         text = msg.replace("/broadcast", "").strip()
         users = load_users()
         count = 0
+
         for u in users:
             try:
                 await context.bot.send_message(u, f"📢 {text}")
                 count += 1
             except:
                 pass
+
         await update.message.reply_text(f"Broadcast sent to {count} users.")
         return
 
-    # AI process
+    # IMAGE GENERATOR
+    if msg.startswith("/img"):
+        prompt = msg.replace("/img", "").strip()
+
+        if prompt == "":
+            await update.message.reply_text("🖼️ Use: `/img cat wearing sunglasses`", parse_mode="Markdown")
+            return
+
+        await update.message.reply_text("🎨 Creating image... wait 5 sec...")
+
+        try:
+            img = client.images.generate(
+                model="gpt-image-1",
+                prompt=prompt,
+                size="1024x1024"
+            )
+
+            image_url = img.data[0].url
+
+            await update.message.reply_photo(
+                photo=image_url,
+                caption=f"🎨 **Generated Image:**\n`{prompt}`",
+                parse_mode="Markdown"
+            )
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+        return
+
+    # AI CHAT
     await update.message.reply_text("💬 Working on it...")
     reply = await ai_response(msg)
     await update.message.reply_text(reply)
@@ -173,5 +242,6 @@ async def main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # RUN BOT
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CallbackQueryHandler(callback_handler, pattern="check_join"))
+app.add_handler(MessageHandler(filters.PHOTO, image_handler))
 app.add_handler(MessageHandler(filters.TEXT, main_handler))
 app.run_polling()
