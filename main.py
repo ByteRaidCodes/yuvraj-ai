@@ -1,5 +1,5 @@
-os.system("pip install openai==1.30.0 python-telegram-bot==20.3 dnspython requests")
 import os
+os.system("pip install openai==1.30.0 python-telegram-bot==20.3 dnspython requests")
 import json
 import requests
 import socket
@@ -303,4 +303,5 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CallbackQueryHandler(callback_handler))
 app.add_handler(MessageHandler(filters.TEXT, main_handler))
 app.run_polling()
+
 
